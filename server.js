@@ -60,7 +60,7 @@ app.get('/scan/:number', async (req, res) => {
                     </body>
                 </html>
             `);
-        } else if (retries >= 20) { // wait max 10 seconds
+        } else if (retries >= 60) { // wait max 10 seconds
             clearInterval(interval);
             res.send(`<h2>WhatsApp is already connected or QR not ready for ${number}</h2>`);
         }
