@@ -1,3 +1,5 @@
+require('dotenv').config(); // This should be at the VERY TOP of your file
+
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode');
@@ -7,20 +9,42 @@ const path = require('path');
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+/*old  app.use(cors()); */
+
+// Configure CORS with environment variable
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS || '*'
+}));
 
 const clients = {}; // Store clients by number
 const qrCodes = {}; // Store QR codes by number
 
 // Get session path
-const getSessionPath = (number) => path.join(__dirname, 'sessions', number);
+//old const getSessionPath = (number) => path.join(__dirname, 'sessions', number);
+
+// Update session path to use environment variable
+const getSessionPath = (number) => path.join(process.env.SESSION_PATH || __dirname, 'sessions', number);
+
 
 // Create client
 const createClient = (number) => {
     if (clients[number]) return clients[number]; // already exists
 
-    const client = new Client({
+    /*const client = new Client({
         authStrategy: new LocalAuth({ clientId: number, dataPath: getSessionPath(number) }),
+    });*/
+	
+	const client = new Client({
+        authStrategy: new LocalAuth({ clientId: number, dataPath: getSessionPath(number) }),
+        puppeteer: {
+            headless: process.env.HEADLESS !== 'false',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                ...(process.env.DISABLE_GPU === 'true' ? ['--disable-gpu'] : [])
+            ]
+        }
     });
 
     client.on('qr', async (qr) => {
@@ -60,7 +84,7 @@ app.get('/scan/:number', async (req, res) => {
                     </body>
                 </html>
             `);
-        } else if (retries >= 60) { // wait max 10 seconds
+        } else if (retries >= 20) { // wait max 10 seconds
             clearInterval(interval);
             res.send(`<h2>WhatsApp is already connected or QR not ready for ${number}</h2>`);
         }
@@ -116,8 +140,13 @@ app.get('/status/:number', async (req, res) => {
 });
 
 
-app.listen(3000, () => {
+/*app.listen(3000, () => {
     console.log('Server running on http://localhost:3000');
+});*/
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
 
 
