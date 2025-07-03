@@ -102,9 +102,13 @@ app.post('/send-message', async (req, res) => {
     }
 
     try {
-        const chatId = `${to}@c.us`;
-        await clients[number].sendMessage(chatId, message);
-        res.json({ success: true });
+        //const chatId = `${to}@c.us`;
+        //await clients[number].sendMessage(chatId, message);
+	const chatId = `${to}@c.us`;
+	const chat = await clients[number].getChatById(chatId);
+	await chat.sendMessage(message);
+	res.json({ success: true });    
+
     } catch (error) {
         res.status(500).json({ error: error.toString() });
     }
