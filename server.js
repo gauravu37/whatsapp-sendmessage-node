@@ -44,7 +44,7 @@ const createClient = (number) => {
     }),
     puppeteer: {
       headless: true,
-      executablePath: detectChromePath(),
+      executablePath: '/usr/bin/google-chrome-stable',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -78,6 +78,9 @@ const createClient = (number) => {
     qrCodes[number] = null;
   });
   console.log("👉 Using Chrome:", detectChromePath());
+  client.on('disconnected', () => {
+    console.error('❌ Puppeteer disconnected — Chrome likely crashed.');
+  });
 
   client.initialize();
   clients[number] = client;
@@ -164,4 +167,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
 
