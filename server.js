@@ -43,7 +43,7 @@ const createClient = (number) => {
       dataPath: getSessionPath(number)
     }),
     puppeteer: {
-      headless: process.env.HEADLESS !== 'false',
+      headless: true,
       executablePath: detectChromePath(),
       args: [
         '--no-sandbox',
@@ -52,7 +52,8 @@ const createClient = (number) => {
         '--disable-extensions',
         '--disable-gpu',
         '--single-process',
-        '--no-zygote'
+        '--no-zygote',
+        '--disable-software-rasterizer'
       ]
     }
   });
@@ -76,6 +77,7 @@ const createClient = (number) => {
     console.log(`✅ WhatsApp ready for ${number}`);
     qrCodes[number] = null;
   });
+  console.log("👉 Using Chrome:", detectChromePath());
 
   client.initialize();
   clients[number] = client;
@@ -162,3 +164,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
