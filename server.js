@@ -1,4 +1,4 @@
-require('dotenv').config(); // Must be at the very top
+require('dotenv').config();
 
 const express = require('express');
 const { Client, LocalAuth } = require('whatsapp-web.js');
@@ -10,19 +10,30 @@ const path = require('path');
 const app = express();
 app.use(express.json());
 
-// ✅ Allow external access (set allowed origins in .env if needed)
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS || '*'
 }));
 
-const clients = {};  // Store clients by number
-const qrCodes = {};  // Store QR codes by number
+const clients = {};   // store clients by number
+const qrCodes = {};   // store QR codes by number
 
-// ✅ Dynamic session path
-const getSessionPath = (number) => 
-  path.join(process.env.SESSION_PATH || path.join(__dirname, 'sessions'), number);
+// Session storage path
+const getSessionPath = (number) =>
+  path.join(process.env.SESSION_PATH || __dirname, 'sessions', number);
 
-// ✅ Create a client
+// Try to detect Chrome path automatically
+const detectChromePath = () => {
+  const candidates = [
+    process.env.CHROME_PATH,
+    '/usr/bin/google-chrome-stable',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/snap/bin/chromium'
+  ];
+  return candidates.find(p => p && fs.existsSync(p));
+};
+
+// Create a WhatsApp client
 const createClient = (number) => {
   if (clients[number]) return clients[number];
 
@@ -33,6 +44,7 @@ const createClient = (number) => {
     }),
     puppeteer: {
       headless: process.env.HEADLESS !== 'false',
+      executablePath: detectChromePath(),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -46,9 +58,18 @@ const createClient = (number) => {
   });
 
   client.on('qr', async (qr) => {
-    const qrImage = await qrcode.toDataURL(qr);
-    qrCodes[number] = qrImage;
-    console.log(`✅ QR generated for ${number}`);
+    qrCodes[number] = await qrcode.toDataURL(qr);
+    console.log(`📲 QR generated for ${number}`);
+  });
+
+  client.on('authenticated', () => {
+    console.log(`🔑 Authenticated for ${number}`);
+  });
+
+  client.on('auth_failure', (msg) => {
+    console.error(`❌ Auth failure for ${number}:`, msg);
+    delete clients[number];
+    delete qrCodes[number];
   });
 
   client.on('ready', () => {
@@ -56,20 +77,15 @@ const createClient = (number) => {
     qrCodes[number] = null;
   });
 
-  client.on('disconnected', () => {
-    console.log(`⚠️ WhatsApp disconnected for ${number}`);
-    delete clients[number];
-    delete qrCodes[number];
-  });
-
   client.initialize();
   clients[number] = client;
   return client;
 };
 
-// ✅ Route: Scan QR
+// Route to scan QR
 app.get('/scan/:number', async (req, res) => {
   const number = req.params.number;
+
   createClient(number);
 
   let retries = 0;
@@ -93,7 +109,7 @@ app.get('/scan/:number', async (req, res) => {
   }, 500);
 });
 
-// ✅ Route: Send message
+// API to send message
 app.post('/send-message', async (req, res) => {
   const { number, to, message } = req.body;
 
@@ -104,13 +120,13 @@ app.post('/send-message', async (req, res) => {
   try {
     const chatId = `${to}@c.us`;
     await clients[number].sendMessage(chatId, message);
-    res.json({ success: true });
+    res.json({ success: true, sent: { from: number, to, message } });
   } catch (error) {
     res.status(500).json({ error: error.toString() });
   }
 });
 
-// ✅ Route: Reset session
+// Reset session
 app.get('/reset/:number', async (req, res) => {
   const number = req.params.number;
   const sessionPath = getSessionPath(number);
@@ -122,26 +138,27 @@ app.get('/reset/:number', async (req, res) => {
       delete clients[number];
       delete qrCodes[number];
     }
-    res.send(`Session for ${number} reset. Visit /scan/${number} to reconnect.`);
+    res.send(`Session for ${number} has been reset. Visit /scan/${number} to reconnect.`);
   } catch (e) {
     res.status(500).send(`Error resetting session: ${e}`);
   }
 });
 
-// ✅ Route: Status
+// Status
 app.get('/status/:number', async (req, res) => {
   const number = req.params.number;
   const client = clients[number];
 
   if (client && client.info && client.info.wid) {
     res.json({ status: 'connected', wid: client.info.wid.user });
+  } else if (qrCodes[number]) {
+    res.json({ status: 'qr_pending' });
   } else {
     res.json({ status: 'not_connected' });
   }
 });
 
-// ✅ Start server on external interface
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
 });
